@@ -510,7 +510,7 @@
   }
 </script>
 
-<script>
+<script id="WORLD">
   console.log("************************************************");
 
   function stroke(ptlist, args) {
@@ -3726,7 +3726,6 @@
           return false;
         }
       }
-      console.log("+");
       reg.push(r);
       return true;
     }
@@ -3869,8 +3868,7 @@
         }
       }
       console.log("EH?WTF!");
-      console.log(MEM.chunks);
-      console.log(nch);
+      console.log(nch.tag, nch.x, nch.y);
     };
 
     while (xmax > MEM.xmax - MEM.cwid || xmin < MEM.xmin + MEM.cwid) {
@@ -3886,89 +3884,154 @@
       }
 
       for (var i = 0; i < plan.length; i++) {
-        if (plan[i].tag == "mount") {
-          add({
-            tag: plan[i].tag,
-            x: plan[i].x,
-            y: plan[i].y,
-            canv: Mount.mountain(plan[i].x, plan[i].y, i * 2 * Math.random()),
-            //{col:function(x){return "rgba(100,100,100,"+(0.5*Math.random()*plan[i].y/MEM.windy)+")"}}),
-          });
-          add({
-            tag: plan[i].tag,
-            x: plan[i].x,
-            y: plan[i].y - 10000,
-            canv: water(plan[i].x, plan[i].y, i * 2),
-          });
-        } else if (plan[i].tag == "flatmount") {
-          add({
-            tag: plan[i].tag,
-            x: plan[i].x,
-            y: plan[i].y,
-            canv: Mount.flatMount(
-              plan[i].x,
-              plan[i].y,
-              2 * Math.random() * Math.PI,
-              {
-                wid: 600 + Math.random() * 400,
-                hei: 100,
-                cho: 0.5 + Math.random() * 0.2,
-              },
-            ),
-          });
-        } else if (plan[i].tag == "distmount") {
-          add({
-            tag: plan[i].tag,
-            x: plan[i].x,
-            y: plan[i].y,
-            canv: Mount.distMount(plan[i].x, plan[i].y, Math.random() * 100, {
-              hei: 150,
-              len: randChoice([500, 1000, 1500]),
-            }),
-          });
-        } else if (plan[i].tag == "boat") {
-          add({
-            tag: plan[i].tag,
-            x: plan[i].x,
-            y: plan[i].y,
-            canv: Arch.boat01(plan[i].x, plan[i].y, Math.random(), {
-              sca: plan[i].y / 800,
-              fli: randChoice([true, false]),
-            }),
-          });
-        } else if (plan[i].tag == "redcirc") {
-          add({
-            tag: plan[i].tag,
-            x: plan[i].x,
-            y: plan[i].y,
-            canv:
-              "<circle cx='" +
-              plan[i].x +
-              "' cy='" +
-              plan[i].y +
-              "' r='20' stroke='black' fill='red' />",
-          });
-        } else if (plan[i].tag == "greencirc") {
-          add({
-            tag: plan[i].tag,
-            x: plan[i].x,
-            y: plan[i].y,
-            canv:
-              "<circle cx='" +
-              plan[i].x +
-              "' cy='" +
-              plan[i].y +
-              "' r='20' stroke='black' fill='green' />",
-          });
-        }
-        // add ({
-        //   x: plan[i].x,
-        //   y: plan[i].y,
-        //   canv:"<circle cx='"+plan[i].x+"' cy='"+plan[i].y+"' r='20' stroke='black' fill='red' />"
-        // })
+        var made = realizePlan(plan[i], i);
+        for (var k = 0; k < made.length; k++) add(made[k]);
       }
     }
   }
+
+  function realizePlan(p, i) {
+    var list = [];
+    function emit(nch) {
+      if (nch.canv.includes("NaN")) {
+        nch.canv = nch.canv.replace(/NaN/g, -1000);
+      }
+      list.push(nch);
+    }
+    if (p.tag == "mount") {
+      emit({
+        tag: p.tag,
+        x: p.x,
+        y: p.y,
+        canv: Mount.mountain(p.x, p.y, i * 2 * Math.random()),
+      });
+      emit({
+        tag: p.tag,
+        x: p.x,
+        y: p.y - 10000,
+        canv: water(p.x, p.y, i * 2),
+      });
+    } else if (p.tag == "flatmount") {
+      emit({
+        tag: p.tag,
+        x: p.x,
+        y: p.y,
+        canv: Mount.flatMount(p.x, p.y, 2 * Math.random() * Math.PI, {
+          wid: 600 + Math.random() * 400,
+          hei: 100,
+          cho: 0.5 + Math.random() * 0.2,
+        }),
+      });
+    } else if (p.tag == "distmount") {
+      emit({
+        tag: p.tag,
+        x: p.x,
+        y: p.y,
+        canv: Mount.distMount(p.x, p.y, Math.random() * 100, {
+          hei: 150,
+          len: randChoice([500, 1000, 1500]),
+        }),
+      });
+    } else if (p.tag == "boat") {
+      emit({
+        tag: p.tag,
+        x: p.x,
+        y: p.y,
+        canv: Arch.boat01(p.x, p.y, Math.random(), {
+          sca: p.y / 800,
+          fli: randChoice([true, false]),
+        }),
+      });
+    } else if (p.tag == "redcirc") {
+      emit({
+        tag: p.tag,
+        x: p.x,
+        y: p.y,
+        canv:
+          "<circle cx='" +
+          p.x +
+          "' cy='" +
+          p.y +
+          "' r='20' stroke='black' fill='red' />",
+      });
+    } else if (p.tag == "greencirc") {
+      emit({
+        tag: p.tag,
+        x: p.x,
+        y: p.y,
+        canv:
+          "<circle cx='" +
+          p.x +
+          "' cy='" +
+          p.y +
+          "' r='20' stroke='black' fill='green' />",
+      });
+    }
+    return list;
+  }
+
+  var GEN_JOB = null;
+  var GEN_TARGET_MIN = 0;
+  var GEN_TARGET_MAX = 0;
+  var GEN_RUNNING = false;
+
+  function generatorPump() {
+    GEN_RUNNING = true;
+    try {
+      if (!GEN_JOB) {
+        var planStarted = performance.now();
+        if (GEN_TARGET_MAX > MEM.xmax - MEM.cwid) {
+          GEN_JOB = {
+            plan: mountplanner(MEM.xmax, MEM.xmax + MEM.cwid),
+            i: 0,
+          };
+          MEM.xmax = MEM.xmax + MEM.cwid;
+        } else if (GEN_TARGET_MIN < MEM.xmin + MEM.cwid) {
+          GEN_JOB = {
+            plan: mountplanner(MEM.xmin - MEM.cwid, MEM.xmin),
+            i: 0,
+          };
+          MEM.xmin = MEM.xmin - MEM.cwid;
+        } else {
+          GEN_RUNNING = false;
+          return;
+        }
+        postMessage({
+          type: "timing",
+          tag: "plano",
+          ms: performance.now() - planStarted,
+          xmax: MEM.xmax,
+        });
+      }
+      if (GEN_JOB.i >= GEN_JOB.plan.length) {
+        GEN_JOB = null;
+        setTimeout(generatorPump, 0);
+        return;
+      }
+      var item = GEN_JOB.plan[GEN_JOB.i];
+      var frameStarted = performance.now();
+      var made = realizePlan(item, GEN_JOB.i);
+      var frameMs = performance.now() - frameStarted;
+      GEN_JOB.i++;
+      postMessage({ type: "timing", tag: item.tag, ms: frameMs, xmax: MEM.xmax });
+      for (var k = 0; k < made.length; k++) {
+        postMessage({ type: "piece", piece: made[k], xmax: MEM.xmax });
+      }
+    } catch (err) {
+      GEN_RUNNING = false;
+      postMessage({ type: "error", message: String(err && err.stack ? err.stack : err) });
+      return;
+    }
+    setTimeout(generatorPump, 0);
+  }
+
+  function generatorTarget(min, max) {
+    GEN_TARGET_MIN = min;
+    GEN_TARGET_MAX = max;
+    if (!GEN_RUNNING) generatorPump();
+  }
+
+  /*__VIEW_START__*/
 
   function chunkrender(xmin, xmax) {
     MEM.canv = "";
@@ -3998,45 +4061,47 @@
   }
 
   function viewupdate() {
-    try {
-      document.getElementById("SVG").setAttribute("viewBox", calcViewBox());
-    } catch (e) {
-      console.log("not possible");
-    }
-    //setTimeout(viewupdate,100)
+    if (window.blitView) blitView();
   }
 
-  function needupdate() {
-    return true;
-    if (MEM.xmin < MEM.cursx && MEM.cursx < MEM.xmax - MEM.windx) {
-      return false;
-    }
-    return true;
+  function ensureSvg() {
+    if (document.getElementById("STRIP")) return;
+    var dpr = window.devicePixelRatio || 1;
+    if (dpr > 2) dpr = 2;
+    var bg = document.getElementById("BG");
+    bg.innerHTML = "";
+    bg._dpr = dpr;
+    var port = document.createElement("div");
+    port.id = "VIEWPORT";
+    port.style.width = MEM.windx + "px";
+    port.style.height = MEM.windy + "px";
+    port.style.overflow = "hidden";
+    port.style.position = "relative";
+    port.style.background = "transparent";
+    var strip = document.createElement("div");
+    strip.id = "STRIP";
+    strip.style.position = "absolute";
+    strip.style.left = "0";
+    strip.style.top = "0";
+    strip.style.height = MEM.windy + "px";
+    strip.style.mixBlendMode = "multiply";
+    strip.style.willChange = "transform";
+    port.appendChild(strip);
+    bg.appendChild(port);
+    var bake = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    bake.id = "BAKE";
+    bake.setAttribute("width", "8");
+    bake.setAttribute("height", "8");
+    bake.style.position = "absolute";
+    bake.style.left = "-9999px";
+    bake.style.top = "0";
+    bake.innerHTML = "<g id='BAKE_G'></g>";
+    document.body.appendChild(bake);
   }
 
   function update() {
-    //console.log("update!")
-
-    self.chunkloader(MEM.cursx, MEM.cursx + MEM.windx);
-    self.chunkrender(MEM.cursx, MEM.cursx + MEM.windx);
-
-    document.getElementById("BG").innerHTML =
-      "<svg id='SVG' xmlns='http://www.w3.org/2000/svg' width='" +
-      MEM.windx +
-      "' height='" +
-      MEM.windy +
-      "' style='mix-blend-mode:multiply;'" +
-      "viewBox = '" +
-      calcViewBox() +
-      "'" +
-      "><g id='G' transform='translate(" +
-      0 +
-      ",0)'>" +
-      MEM.canv +
-      //+ "<circle cx='0' cy='0' r='50' stroke='black' fill='red' />"
-      "</g></svg>";
-
-    //setTimeout(update,1000);
+    ensureSvg();
+    if (window.startWorld) startWorld();
   }
 </script>
 
@@ -4056,20 +4121,306 @@
 </script>
 
 <script id="UI">
+  var LOOKAHEAD = 1800;
+  var GEN_WORKER = null;
+  var WORLD_STARTED = false;
+  var PIECES = [];
+  var GEN_XMAX = 0;
+  var TILE_W = 1024;
+  var TILE_MARGIN = 1600;
+  var STAMP_QUEUE = [];
+  var STAMP_ACTIVE = false;
+  var LAST_TARGET = 0;
+  var AUTO_RAF = 0;
+  var AUTO_LAST = 0;
+  var SCROLL_SPEED = 0;
+  var LAST_SPEED_LOG = 0;
+  var LAST_FRAME_TAG = "-";
+  var LAST_FRAME_MS = 0;
+
+  function logScrollStatus() {
+    console.log(
+      "frame " +
+        LAST_FRAME_TAG +
+        " " +
+        LAST_FRAME_MS.toFixed(1) +
+        " ms | scroll " +
+        SCROLL_SPEED.toFixed(1) +
+        " px/s"
+    );
+  }
+
+  function worldScale() {
+    return 1.142;
+  }
+
+  function viewWorldWidth() {
+    return MEM.windx / worldScale();
+  }
+
+  function queueStamp(piece) {
+    STAMP_QUEUE.push(piece);
+    if (!STAMP_ACTIVE) pumpStamp();
+  }
+
+  function placePieceImage(piece, url, x, y, w, h) {
+    var strip = document.getElementById("STRIP");
+    if (!strip) return;
+    var zoom = worldScale();
+    var img = document.createElement("img");
+    img.src = url;
+    img.alt = "";
+    img.dataset.y = piece.y;
+    img.style.position = "absolute";
+    img.style.left = x * zoom + "px";
+    img.style.top = y * zoom + "px";
+    img.style.width = w * zoom + "px";
+    img.style.height = h * zoom + "px";
+    var kids = strip.children;
+    var placed = false;
+    for (var i = 0; i < kids.length; i++) {
+      if (parseFloat(kids[i].dataset.y) > piece.y) {
+        strip.insertBefore(img, kids[i]);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) strip.appendChild(img);
+    piece.el = img;
+    piece.url = url;
+    piece.box = { x: x, y: y, width: w, height: h };
+  }
+
+  function pumpStamp() {
+    if (!STAMP_QUEUE.length) {
+      STAMP_ACTIVE = false;
+      return;
+    }
+    STAMP_ACTIVE = true;
+    var piece = STAMP_QUEUE.shift();
+    var g = document.getElementById("BAKE_G");
+    if (!g) {
+      STAMP_ACTIVE = false;
+      return;
+    }
+    var started = performance.now();
+    g.innerHTML = piece.canv;
+    var box = g.getBBox();
+    g.innerHTML = "";
+    if (!(box.width > 0) || !(box.height > 0)) {
+      setTimeout(pumpStamp, 0);
+      return;
+    }
+    var pad = 2;
+    var x = box.x - pad;
+    var y = box.y - pad;
+    var w = box.width + pad * 2;
+    var h = box.height + pad * 2;
+    var zoom = worldScale();
+    var pxW = Math.max(1, Math.ceil(w * zoom));
+    var pxH = Math.max(1, Math.ceil(h * zoom));
+    var svg =
+      "<svg xmlns='http://www.w3.org/2000/svg' width='" +
+      pxW +
+      "' height='" +
+      pxH +
+      "' viewBox='" +
+      x +
+      " " +
+      y +
+      " " +
+      w +
+      " " +
+      h +
+      "'>" +
+      piece.canv +
+      "</svg>";
+    var prepareMs = performance.now() - started;
+    var blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var rasterStarted = performance.now();
+    var image = new Image();
+    image.onload = function() {
+      var rasterMs = performance.now() - rasterStarted;
+      var paintStarted = performance.now();
+      placePieceImage(piece, url, x, y, w, h);
+      var paintMs = performance.now() - paintStarted;
+      console.log(
+        "render " +
+          (piece.tag || "piece") +
+          " " +
+          (prepareMs + rasterMs + paintMs).toFixed(1) +
+          " ms (montar " +
+          prepareMs.toFixed(1) +
+          " ms, raster " +
+          rasterMs.toFixed(1) +
+          " ms, tela " +
+          paintMs.toFixed(1) +
+          " ms) | scroll " +
+          SCROLL_SPEED.toFixed(1) +
+          " px/s"
+      );
+      setTimeout(pumpStamp, 0);
+    };
+    image.onerror = function() {
+      URL.revokeObjectURL(url);
+      setTimeout(pumpStamp, 0);
+    };
+    image.src = url;
+  }
+
+  function forgetBehind() {
+    var keepX = MEM.cursx - TILE_MARGIN;
+    if (!PIECES.length) return;
+    var kept = [];
+    for (var i = 0; i < PIECES.length; i++) {
+      var p = PIECES[i];
+      var right = p.box ? p.box.x + p.box.width : p.x;
+      if (right < keepX) {
+        if (p.el && p.el.parentNode) p.el.parentNode.removeChild(p.el);
+        if (p.url) URL.revokeObjectURL(p.url);
+      } else kept.push(p);
+    }
+    PIECES = kept;
+  }
+
+
+  function blitView() {
+    var strip = document.getElementById("STRIP");
+    if (!strip) return;
+    var x = -MEM.cursx * worldScale();
+    strip.style.transform = "translate3d(" + x.toFixed(2) + "px,0,0)";
+  }
+
+  function downloadScene() {
+    var list = PIECES.slice().sort(function(a, b) {
+      return a.y - b.y;
+    });
+    var body = "";
+    for (var i = 0; i < list.length; i++) body += list[i].canv;
+    var svg =
+      "<svg xmlns='http://www.w3.org/2000/svg' width='" +
+      MEM.windx +
+      "' height='" +
+      MEM.windy +
+      "' viewBox='" +
+      calcViewBox() +
+      "'>" +
+      body +
+      "</svg>";
+    download(Math.random() + ".svg", svg);
+  }
+
+  function requestFill() {
+    if (!GEN_WORKER) return;
+    LAST_TARGET = performance.now();
+    var max = MEM.cursx + viewWorldWidth() + TILE_W * 3 + TILE_MARGIN;
+    GEN_WORKER.postMessage({
+      type: "target",
+      min: 1e9,
+      max: max,
+    });
+  }
+
+  function syncRebuild() {
+    self.chunkloader(MEM.cursx - LOOKAHEAD, MEM.cursx + MEM.windx + LOOKAHEAD);
+    self.chunkrender(MEM.cursx - MEM.windx, MEM.cursx + MEM.windx * 2);
+    var g = document.getElementById("G");
+    if (g) g.innerHTML = MEM.canv;
+  }
+
+  function startWorld() {
+    ensureSvg();
+    if (WORLD_STARTED) {
+      requestFill();
+      return;
+    }
+    WORLD_STARTED = true;
+    var marker = "/*__VIEW_START__*/";
+    var world = document.getElementById("WORLD").textContent;
+    var cut = world.indexOf(marker);
+    var src = [
+      "var window = self;",
+      document.getElementById("PRNG").textContent,
+      "Math.seed(" + JSON.stringify(SEED) + ");",
+      document.getElementById("PerlinNoise").textContent,
+      document.getElementById("PolyTools").textContent,
+      document.getElementById("Util").textContent,
+      world.slice(0, cut),
+      "onmessage = function(e) {",
+      "  if (e.data && e.data.type === 'target') generatorTarget(e.data.min, e.data.max);",
+      "};",
+    ].join("\n");
+    try {
+      var blob = new Blob([src], { type: "application/javascript" });
+      GEN_WORKER = new Worker(URL.createObjectURL(blob));
+    } catch (err) {
+      console.log(err);
+      syncRebuild();
+      return;
+    }
+    GEN_WORKER.onmessage = function(e) {
+      if (!e.data) return;
+      if (e.data.type === "piece") {
+        PIECES.push(e.data.piece);
+        if (e.data.xmax > GEN_XMAX) GEN_XMAX = e.data.xmax;
+        queueStamp(e.data.piece);
+      } else if (e.data.type === "timing") {
+        LAST_FRAME_TAG = e.data.tag;
+        LAST_FRAME_MS = e.data.ms;
+        if (e.data.xmax > GEN_XMAX) GEN_XMAX = e.data.xmax;
+        logScrollStatus();
+        LAST_SPEED_LOG = performance.now();
+      } else if (e.data.type === "error") {
+        console.log(e.data.message);
+        if (!PIECES.length) syncRebuild();
+      }
+    };
+    GEN_WORKER.onerror = function(err) {
+      console.log(err.message || err);
+      if (!PIECES.length) syncRebuild();
+    };
+    requestFill();
+  }
+
+  function autoSpeed() {
+    var step = parseFloat(document.getElementById("INC_STEP").value);
+    if (!isFinite(step) || step <= 0) step = 120;
+    return Math.max(10, Math.min(400, step));
+  }
+
+  function autoFrame(now) {
+    AUTO_RAF = 0;
+    if (!document.getElementById("AUTO_SCROLL").checked) {
+      SCROLL_SPEED = 0;
+      return;
+    }
+    var dt = Math.min(34, now - AUTO_LAST);
+    AUTO_LAST = now;
+    var speed = autoSpeed();
+    SCROLL_SPEED = speed;
+    MEM.cursx += (speed * dt) / 1000;
+    viewupdate();
+    if (now - LAST_SPEED_LOG > 1000) {
+      LAST_SPEED_LOG = now;
+      logScrollStatus();
+    }
+    if (now - LAST_TARGET > 350) {
+      requestFill();
+      forgetBehind();
+    }
+    AUTO_RAF = requestAnimationFrame(autoFrame);
+  }
+
   function xcroll(v) {
     MEM.cursx += v;
-    if (needupdate()) {
-      update();
-    } else {
-      viewupdate();
-    }
+    viewupdate();
+    requestFill();
   }
   function autoxcroll(v) {
     if (document.getElementById("AUTO_SCROLL").checked) {
-      xcroll(v);
-      setTimeout(function() {
-        autoxcroll(v);
-      }, 2000);
+      AUTO_LAST = performance.now();
+      if (!AUTO_RAF) AUTO_RAF = requestAnimationFrame(autoFrame);
     }
   }
   function rstyle(id, b) {
@@ -4194,31 +4545,19 @@
           </td>
         </tr>
         <tr>
-          <td><pre>VIEW</pre></td>
+          <td><pre>SPEED</pre></td>
         </tr>
         <tr>
           <td>
-            <button
-              title="view left"
-              onclick="xcroll(-parseFloat(document.getElementById('INC_STEP').value))"
-            >
-              <
-            </button>
             <input
-              title="increment step"
+              title="pixels per second"
               id="INC_STEP"
               type="number"
-              value="200"
-              min="0"
-              max="10000"
+              value="120"
+              min="10"
+              max="400"
               step="20"
             />
-            <button
-              title="view right"
-              onclick="xcroll(parseFloat(document.getElementById('INC_STEP').value))"
-            >
-              >
-            </button>
           </td>
         </tr>
 
@@ -4241,7 +4580,7 @@
               type="button"
               id="dwn-btn"
               value="Download as SVG"
-              onclick="download(''+(Math.random())+'.svg', document.getElementById('BG').innerHTML);"
+              onclick="downloadScene()"
             >
               Download as .SVG
             </button>
@@ -4283,54 +4622,15 @@
     </script>
   </div>
 
-  <table style="border-bottom: 1px solid rgba(0,0,0,0.1);">
-    <tr>
-      <td>
-        <div
-          id="L"
-          onmouseover="rstyle('L',true)"
-          onmouseout="rstyle('L',false)"
-          onclick="xcroll(-200)"
-        >
-          <div id="L.t"><font size="6px">&#x3008;</font></div>
-          <script>
-            rstyle("L", false);
-          </script>
-        </div>
-      </td>
-
-      <td>
-        <div id="BG">
-          <script>
-            MEM.lasttick = new Date().getTime();
-            document.getElementById("INP_SEED").value = SEED;
-            document
-              .getElementById("BG")
-              .setAttribute("style", "width:" + MEM.windx + "px");
-            update();
-            document.body.scrollTo(0, 0);
-            console.log(["SCROLLX", window.scrollX]);
-            present();
-            //draw();
-          </script>
-        </div>
-      </td>
-
-      <td>
-        <div
-          id="R"
-          onmouseover="rstyle('R',true)"
-          onmouseout="rstyle('R',false)"
-          onclick="xcroll(200)"
-        >
-          <div id="R.t"><font size="6px">&#x3009;</font></div>
-          <script>
-            rstyle("R", false);
-          </script>
-        </div>
-      </td>
-    </tr>
-  </table>
+  <div id="BG" style="overflow:hidden">
+    <script>
+      MEM.lasttick = new Date().getTime();
+      document.getElementById("INP_SEED").value = SEED;
+      document.getElementById("BG").style.width = MEM.windx + "px";
+      update();
+      document.body.scrollTo(0, 0);
+    </script>
+  </div>
 </body>
 
 <canvas id="bgcanv" width="512" height="512" hidden> </canvas>
@@ -4358,4 +4658,6 @@
   document.getElementById("BG").style.backgroundImage = "url(" + img + ")";
   document.getElementsByTagName("body")[0].style.backgroundImage =
     "url(" + img + ")";
+  var port = document.getElementById("VIEWPORT");
+  if (port) port.style.backgroundImage = "url(" + img + ")";
 </script>
