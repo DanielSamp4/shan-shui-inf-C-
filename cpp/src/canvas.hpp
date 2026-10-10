@@ -20,6 +20,7 @@ class Canvas {
 
   void setPixel(int x, int y, Rgba color);
   void fillPolygon(const std::vector<Vec2>& polygon, Rgba color);
+  void strokePolygon(const std::vector<Vec2>& polygon, Rgba color, double width);
   void blit(int destX, int destY, const Canvas& source);
   void blendMultiply(const Canvas& ink);
   Rgba pixel(int x, int y) const;

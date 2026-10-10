@@ -11,6 +11,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -52,6 +53,20 @@ bool samePieces(const std::vector<Piece>& got, const std::vector<Piece>& want) {
 
 int main(int argc, char** argv) {
   const std::string seed = argc > 1 ? argv[1] : "1";
+  double scrollSpeed = 120.0;
+  if (argc > 2) {
+    try {
+      std::size_t parsed = 0;
+      scrollSpeed = std::stod(argv[2], &parsed);
+      if (parsed != std::string(argv[2]).size() || !std::isfinite(scrollSpeed) || scrollSpeed < 0.0) {
+        throw std::invalid_argument("invalid speed");
+      }
+    } catch (const std::exception&) {
+      std::cerr << "Uso: " << argv[0] << " [seed] [velocidade_em_px_por_segundo]\n";
+      std::cerr << "A velocidade deve ser um numero finito maior ou igual a zero.\n";
+      return 2;
+    }
+  }
   Prng prng;
   const double initial = prng.seed(seed);
 
@@ -280,10 +295,10 @@ int main(int argc, char** argv) {
   scene.writeBmp("scene-check.bmp");
   std::cout << "ok scene-check.bmp\n";
 
-  Generator generator("1");
+  Generator generator(seed);
   generator.start(3584);
   ChunkPlan referencePlan;
-  const std::vector<Piece> reference = collectPieces("1", 3584, referencePlan);
+  const std::vector<Piece> reference = collectPieces(seed, 3584, referencePlan);
 
   std::vector<Piece> received;
   GenEvent event;
@@ -298,7 +313,7 @@ int main(int argc, char** argv) {
     received.push_back(std::move(event.piece));
   }
 
-  const bool planOk = generator.plan().matchesSeed1();
+  const bool planOk = seed != "1" || generator.plan().matchesSeed1();
   const bool threadOk = samePieces(received, reference);
   std::cout << "plan " << generator.plan().items().size() << " pieces, xmax " << generator.plan().xmax() << "\n";
   std::cout << "received " << received.size() << " drawn pieces\n";
@@ -310,7 +325,7 @@ int main(int argc, char** argv) {
   strip.writeBmp("chunk-check.bmp");
   std::cout << "ok chunk-check.bmp\n";
 
-  const bool scrollOk = playScroll(received, seed, &generator);
+  const bool scrollOk = playScroll(received, seed, scrollSpeed, &generator);
   return strokeOk && ridgeOk && textureOk && footOk && distantOk && flatOk && hutOk && boatOk && paperOk &&
                  multiplyOk && planOk && threadOk && scrollOk
              ? 0

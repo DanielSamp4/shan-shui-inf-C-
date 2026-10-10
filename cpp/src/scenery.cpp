@@ -19,6 +19,10 @@ double textureSpread(Prng& prng) {
   return (2.0 / 3.0) + (1.0 / 3.0) * prng.next();
 }
 
+Vec2 quantizeForSvg(Vec2 point) {
+  return {std::round(point.x * 10.0) / 10.0, std::round(point.y * 10.0) / 10.0};
+}
+
 }  // namespace
 
 std::vector<std::vector<Vec2>> textureCenters(const std::vector<std::vector<Vec2>>& layers, int count, Prng& prng,
@@ -96,13 +100,14 @@ Ridge buildRidge(double yOffset, double seed, Prng& prng, Noise& noise, double h
 }
 
 void addRibbon(std::vector<Ink>& inks, const std::vector<Vec2>& center, Prng& prng, Noise& noise, StrokeStyle style,
-               Rgba color) {
+               Rgba color, double outlineWidth = 0.0) {
   if (center.empty()) {
     return;
   }
   Ink ink;
   ink.polygon = strokeRibbon(center, prng, noise, style);
   ink.color = color;
+  ink.outlineWidth = outlineWidth;
   inks.push_back(ink);
 }
 
@@ -1212,7 +1217,7 @@ void addTwig(std::vector<Ink>& inks, double x, double y, int depth, int directio
   StrokeStyle style;
   style.width = 1;
   style.widthFn = [](double t) { return std::cos((t * kPi) / 2.0); };
-  addRibbon(inks, line, prng, noise, style, gray(0.5));
+  addRibbon(inks, line, prng, noise, style, gray(0.5), 1.0);
 }
 
 void addBark(std::vector<Ink>& inks, double x, double y, const Branch& branch, Prng& prng, Noise& noise) {
@@ -1569,7 +1574,7 @@ void addReed(std::vector<Ink>& inks, double x, double y, int depth, double lengt
   } else {
     style.widthFn = [](double) { return 1.0; };
   }
-  addRibbon(inks, line, prng, noise, style, gray(0.5));
+  addRibbon(inks, line, prng, noise, style, gray(0.5), 1.0);
   if (depth == 0) {
     return;
   }
@@ -2259,10 +2264,12 @@ void paintPieces(Canvas& canvas, const std::vector<Piece>& pieces, double origin
     for (const Ink& ink : piece->inks) {
       std::vector<Vec2> shifted;
       shifted.reserve(ink.polygon.size());
-      for (const Vec2& point : ink.polygon) {
+      for (const Vec2& rawPoint : ink.polygon) {
+        const Vec2 point = quantizeForSvg(rawPoint);
         shifted.push_back({point.x - originX, point.y - originY});
       }
       inkLayer.fillPolygon(shifted, ink.color);
+      inkLayer.strokePolygon(shifted, ink.color, ink.outlineWidth);
     }
   }
   canvas.blendMultiply(inkLayer);
@@ -2309,7 +2316,13 @@ void drawStill(Canvas& canvas) {
 
   Canvas inkLayer = Canvas::transparent(canvas.width(), canvas.height());
   for (const Ink& ink : inks) {
-    inkLayer.fillPolygon(ink.polygon, ink.color);
+    std::vector<Vec2> polygon;
+    polygon.reserve(ink.polygon.size());
+    for (const Vec2& point : ink.polygon) {
+      polygon.push_back(quantizeForSvg(point));
+    }
+    inkLayer.fillPolygon(polygon, ink.color);
+    inkLayer.strokePolygon(polygon, ink.color, ink.outlineWidth);
   }
   canvas.blendMultiply(inkLayer);
 }

@@ -12,6 +12,7 @@
 struct Ink {
   std::vector<Vec2> polygon;
   Rgba color;
+  double outlineWidth = 0;
 };
 
 std::vector<Ink> tree02(double x, double y, Prng& prng, Noise& noise, int clusters = 5, double height = 16,

@@ -19,13 +19,12 @@
 
 namespace {
 
-constexpr int kViewWidth = 960;
-constexpr int kViewHeight = 640;
-constexpr double kViewTop = 40;
-constexpr double kSpeed = 120;
-constexpr double kCameraStart = -200;
+constexpr int kViewWidth = 3000;
+constexpr int kViewHeight = 800;
+constexpr double kWorldScale = 1.142;
+constexpr double kCameraStart = 0;
 constexpr double kForgetMargin = 1600;
-constexpr double kLookAhead = 2048;
+constexpr double kLookAhead = 1800;
 constexpr Rgba kPaper{245, 236, 220, 1};
 
 struct Sprite {
@@ -35,6 +34,10 @@ struct Sprite {
   Canvas image;
 };
 
+Vec2 quantizeForSvg(Vec2 point) {
+  return {std::round(point.x * 10.0) / 10.0, std::round(point.y * 10.0) / 10.0};
+}
+
 Sprite rasterize(const Piece& piece) {
   double minX = 0;
   double minY = 0;
@@ -42,7 +45,8 @@ Sprite rasterize(const Piece& piece) {
   double maxY = 0;
   bool any = false;
   for (const Ink& ink : piece.inks) {
-    for (const Vec2& point : ink.polygon) {
+    for (const Vec2& rawPoint : ink.polygon) {
+      const Vec2 point = quantizeForSvg(rawPoint);
       if (!any) {
         minX = maxX = point.x;
         minY = maxY = point.y;
@@ -59,20 +63,22 @@ Sprite rasterize(const Piece& piece) {
   if (!any) {
     return sprite;
   }
-  const double left = std::floor(minX) - 2.0;
-  const double top = std::floor(minY) - 2.0;
-  const int width = std::max(1, static_cast<int>(std::ceil(maxX) - left) + 2);
-  const int height = std::max(1, static_cast<int>(std::ceil(maxY) - top) + 2);
-  sprite.left = left;
-  sprite.top = top;
+  const double left = minX - 2.0;
+  const double top = minY - 2.0;
+  const int width = std::max(1, static_cast<int>(std::ceil((maxX - minX + 4.0) * kWorldScale)));
+  const int height = std::max(1, static_cast<int>(std::ceil((maxY - minY + 4.0) * kWorldScale)));
+  sprite.left = left * kWorldScale;
+  sprite.top = top * kWorldScale;
   sprite.image = Canvas::transparent(width, height);
   for (const Ink& ink : piece.inks) {
     std::vector<Vec2> shifted;
     shifted.reserve(ink.polygon.size());
-    for (const Vec2& point : ink.polygon) {
-      shifted.push_back({point.x - left, point.y - top});
+    for (const Vec2& rawPoint : ink.polygon) {
+      const Vec2 point = quantizeForSvg(rawPoint);
+      shifted.push_back({(point.x - left) * kWorldScale, (point.y - top) * kWorldScale});
     }
     sprite.image.fillPolygon(shifted, ink.color);
+    sprite.image.strokePolygon(shifted, ink.color, ink.outlineWidth);
   }
   return sprite;
 }
@@ -81,15 +87,15 @@ void compose(Canvas& frame, const std::vector<Sprite>& sprites, double camera, c
   tilePaper(frame, paper);
   Canvas ink = Canvas::transparent(frame.width(), frame.height());
   for (const Sprite& sprite : sprites) {
-    const int x = static_cast<int>(std::lround(sprite.left - camera));
-    const int y = static_cast<int>(std::lround(sprite.top - kViewTop));
+    const int x = static_cast<int>(std::lround(sprite.left - camera * kWorldScale));
+    const int y = static_cast<int>(std::lround(sprite.top));
     ink.blit(x, y, sprite.image);
   }
   frame.blendMultiply(ink);
 }
 
 void forgetBehind(std::vector<Sprite>& sprites, double camera) {
-  const double limit = camera - kForgetMargin;
+  const double limit = (camera - kForgetMargin) * kWorldScale;
   sprites.erase(std::remove_if(sprites.begin(), sprites.end(),
                                [&](const Sprite& sprite) {
                                  return sprite.left + sprite.image.width() < limit;
@@ -129,7 +135,7 @@ void present(HWND window, const Canvas& frame, std::vector<std::uint8_t>& dib) {
 
 }  // namespace
 
-bool playScroll(const std::vector<Piece>& pieces, const std::string& seed, Generator* live) {
+bool playScroll(const std::vector<Piece>& pieces, const std::string& seed, double speed, Generator* live) {
   std::vector<Sprite> sprites;
   sprites.reserve(pieces.size());
   for (const Piece& piece : pieces) {
@@ -137,7 +143,7 @@ bool playScroll(const std::vector<Piece>& pieces, const std::string& seed, Gener
     sprites.push_back(rasterize(piece));
     const double ms =
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
-    std::cout << "render " << piece.tag << " " << ms << " ms | scroll " << kSpeed << " px/s\n";
+    std::cout << "render " << piece.tag << " " << ms << " ms | scroll " << speed << " px/s\n";
   }
   std::stable_sort(sprites.begin(), sprites.end(),
                    [](const Sprite& a, const Sprite& b) { return a.sortY < b.sortY; });
@@ -146,10 +152,11 @@ bool playScroll(const std::vector<Piece>& pieces, const std::string& seed, Gener
   Canvas first(kViewWidth, kViewHeight, kPaper);
   compose(first, sprites, kCameraStart, paper);
   Canvas later(kViewWidth, kViewHeight, kPaper);
-  compose(later, sprites, kCameraStart + kSpeed, paper);
+  compose(later, sprites, kCameraStart + speed, paper);
   const bool moved = first.checksum() != later.checksum();
+  const bool scrollOk = speed == 0.0 ? !moved : moved;
   first.writeBmp("scroll-check.bmp");
-  std::cout << (moved ? "scroll match\n" : "scroll mismatch\n");
+  std::cout << (scrollOk ? "scroll match\n" : "scroll mismatch\n");
   std::cout << "ok scroll-check.bmp\n";
 
   WNDCLASSW windowClass{};
@@ -166,7 +173,7 @@ bool playScroll(const std::vector<Piece>& pieces, const std::string& seed, Gener
                               windowClass.hInstance, nullptr);
   if (window == nullptr) {
     std::cout << "janela indisponivel\n";
-    return moved;
+    return scrollOk;
   }
 
   std::vector<std::uint8_t> dib(static_cast<std::size_t>(kViewWidth * kViewHeight * 3));
@@ -189,12 +196,12 @@ bool playScroll(const std::vector<Piece>& pieces, const std::string& seed, Gener
     const auto now = std::chrono::steady_clock::now();
     double dt = std::chrono::duration<double>(now - previous).count();
     previous = now;
-    if (dt > 0.05) {
-      dt = 0.05;
+    if (dt > 0.034) {
+      dt = 0.034;
     }
-    camera += kSpeed * dt;
+    camera += speed * dt;
     if (live != nullptr) {
-      if (live->exhausted() && camera + kViewWidth + kLookAhead > live->plan().xmax()) {
+      if (live->exhausted() && camera + kViewWidth / kWorldScale + kLookAhead > live->plan().xmax()) {
         live->extend(live->plan().xmax());
       }
       int drawn = 0;
@@ -224,5 +231,5 @@ bool playScroll(const std::vector<Piece>& pieces, const std::string& seed, Gener
   if (IsWindow(window)) {
     DestroyWindow(window);
   }
-  return moved;
+  return scrollOk;
 }

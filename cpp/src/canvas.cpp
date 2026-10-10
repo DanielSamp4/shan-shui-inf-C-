@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <fstream>
+#include <limits>
 #include <stdexcept>
 
 Canvas::Canvas(int width, int height, bool clear) : width_(width), height_(height) {
@@ -60,34 +61,105 @@ void Canvas::fillPolygon(const std::vector<Vec2>& polygon, Rgba color) {
     --count;
   }
 
+  double minX = polygon[0].x;
+  double maxX = polygon[0].x;
   double minY = polygon[0].y;
   double maxY = polygon[0].y;
   for (std::size_t i = 1; i < count; ++i) {
+    minX = std::min(minX, polygon[i].x);
+    maxX = std::max(maxX, polygon[i].x);
     minY = std::min(minY, polygon[i].y);
     maxY = std::max(maxY, polygon[i].y);
   }
 
+  const int x0 = std::max(0, static_cast<int>(std::floor(minX)));
+  const int x1 = std::min(width_ - 1, static_cast<int>(std::ceil(maxX)));
   const int y0 = std::max(0, static_cast<int>(std::floor(minY)));
   const int y1 = std::min(height_ - 1, static_cast<int>(std::ceil(maxY)));
+  constexpr int kSamples = 2;
+  constexpr double kInvSamples = 1.0 / (kSamples * kSamples);
   for (int y = y0; y <= y1; ++y) {
-    const double scan = static_cast<double>(y) + 0.5;
-    std::vector<double> crossings;
-    for (std::size_t i = 0; i < count; ++i) {
-      const Vec2& a = polygon[i];
-      const Vec2& b = polygon[(i + 1) % count];
-      const bool crosses = (a.y <= scan && b.y > scan) || (b.y <= scan && a.y > scan);
-      if (!crosses) {
-        continue;
+    for (int x = x0; x <= x1; ++x) {
+      int covered = 0;
+      for (int sy = 0; sy < kSamples; ++sy) {
+        for (int sx = 0; sx < kSamples; ++sx) {
+          const double px = static_cast<double>(x) + (static_cast<double>(sx) + 0.5) / kSamples;
+          const double py = static_cast<double>(y) + (static_cast<double>(sy) + 0.5) / kSamples;
+          bool inside = false;
+          for (std::size_t i = 0, previous = count - 1; i < count; previous = i++) {
+            const Vec2& a = polygon[i];
+            const Vec2& b = polygon[previous];
+            if ((a.y > py) != (b.y > py) && px < (b.x - a.x) * (py - a.y) / (b.y - a.y) + a.x) {
+              inside = !inside;
+            }
+          }
+          covered += inside ? 1 : 0;
+        }
       }
-      const double t = (scan - a.y) / (b.y - a.y);
-      crossings.push_back(a.x + t * (b.x - a.x));
+      if (covered != 0) {
+        blend(x, y, color.r, color.g, color.b, color.a * covered * kInvSamples);
+      }
     }
-    std::sort(crossings.begin(), crossings.end());
-    for (std::size_t i = 0; i + 1 < crossings.size(); i += 2) {
-      int x0 = std::max(0, static_cast<int>(std::ceil(crossings[i])));
-      int x1 = std::min(width_ - 1, static_cast<int>(std::floor(crossings[i + 1])));
-      for (int x = x0; x <= x1; ++x) {
-        blend(x, y, color.r, color.g, color.b, color.a);
+  }
+}
+
+void Canvas::strokePolygon(const std::vector<Vec2>& polygon, Rgba color, double width) {
+  if (polygon.size() < 2 || width <= 0.0) {
+    return;
+  }
+  std::size_t count = polygon.size();
+  if (polygon.front().x == polygon.back().x && polygon.front().y == polygon.back().y) {
+    --count;
+  }
+  if (count < 2) {
+    return;
+  }
+
+  double minX = polygon[0].x;
+  double maxX = polygon[0].x;
+  double minY = polygon[0].y;
+  double maxY = polygon[0].y;
+  for (std::size_t i = 1; i < count; ++i) {
+    minX = std::min(minX, polygon[i].x);
+    maxX = std::max(maxX, polygon[i].x);
+    minY = std::min(minY, polygon[i].y);
+    maxY = std::max(maxY, polygon[i].y);
+  }
+  const double radius = width * 0.5;
+  const int x0 = std::max(0, static_cast<int>(std::floor(minX - radius)));
+  const int x1 = std::min(width_ - 1, static_cast<int>(std::ceil(maxX + radius)));
+  const int y0 = std::max(0, static_cast<int>(std::floor(minY - radius)));
+  const int y1 = std::min(height_ - 1, static_cast<int>(std::ceil(maxY + radius)));
+  const double radiusSquared = radius * radius;
+
+  constexpr int kSamples = 2;
+  constexpr double kInvSamples = 1.0 / (kSamples * kSamples);
+  for (int y = y0; y <= y1; ++y) {
+    for (int x = x0; x <= x1; ++x) {
+      int covered = 0;
+      for (int sy = 0; sy < kSamples; ++sy) {
+        for (int sx = 0; sx < kSamples; ++sx) {
+          const double px = static_cast<double>(x) + (static_cast<double>(sx) + 0.5) / kSamples;
+          const double py = static_cast<double>(y) + (static_cast<double>(sy) + 0.5) / kSamples;
+          double nearest = std::numeric_limits<double>::infinity();
+          for (std::size_t i = 0; i < count; ++i) {
+            const Vec2& a = polygon[i];
+            const Vec2& b = polygon[(i + 1) % count];
+            const double dx = b.x - a.x;
+            const double dy = b.y - a.y;
+            const double lengthSquared = dx * dx + dy * dy;
+            const double t = lengthSquared > 0.0
+                                 ? std::clamp(((px - a.x) * dx + (py - a.y) * dy) / lengthSquared, 0.0, 1.0)
+                                 : 0.0;
+            const double ex = px - (a.x + t * dx);
+            const double ey = py - (a.y + t * dy);
+            nearest = std::min(nearest, ex * ex + ey * ey);
+          }
+          covered += nearest <= radiusSquared ? 1 : 0;
+        }
+      }
+      if (covered != 0) {
+        blend(x, y, color.r, color.g, color.b, color.a * covered * kInvSamples);
       }
     }
   }
