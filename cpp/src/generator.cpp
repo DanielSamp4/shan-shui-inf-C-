@@ -42,6 +42,16 @@ void emitPiece(const PlanItem& item, std::size_t indexInChunk, double xmax, Prng
     event.kind = GenEvent::Kind::Piece;
     event.tag = piece.tag;
     event.xmax = xmax;
+    // Rasterization is intentionally done on the generator thread.  The UI
+    // thread only uploads this finished image and keeps presenting frames.
+    const auto rasterStarted = std::chrono::steady_clock::now();
+    event.raster = rasterizePiece(piece);
+    GenEvent rasterTiming;
+    rasterTiming.kind = GenEvent::Kind::Timing;
+    rasterTiming.tag = "worker-raster";
+    rasterTiming.ms = millisSince(rasterStarted);
+    rasterTiming.xmax = xmax;
+    emit(rasterTiming);
     event.piece = std::move(piece);
     emit(std::move(event));
   }

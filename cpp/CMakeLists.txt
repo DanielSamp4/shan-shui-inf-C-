@@ -10,6 +10,7 @@ add_executable(shan_shui
   src/noise.cpp
   src/stroke.cpp
   src/canvas.cpp
+  src/raster.cpp
   src/blob.cpp
   src/scenery.cpp
   src/planner.cpp
@@ -20,7 +21,7 @@ target_compile_features(shan_shui PRIVATE cxx_std_17)
 find_package(Threads REQUIRED)
 target_link_libraries(shan_shui PRIVATE Threads::Threads)
 if(WIN32)
-  target_link_libraries(shan_shui PRIVATE user32 gdi32)
+  target_link_libraries(shan_shui PRIVATE user32 d3d11 dxgi d3dcompiler)
 endif()
 
 if(MSVC)

@@ -100,7 +100,7 @@ Ridge buildRidge(double yOffset, double seed, Prng& prng, Noise& noise, double h
 }
 
 void addRibbon(std::vector<Ink>& inks, const std::vector<Vec2>& center, Prng& prng, Noise& noise, StrokeStyle style,
-               Rgba color, double outlineWidth = 0.0) {
+               Rgba color, double outlineWidth = 1.0) {
   if (center.empty()) {
     return;
   }

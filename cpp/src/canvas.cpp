@@ -115,51 +115,42 @@ void Canvas::strokePolygon(const std::vector<Vec2>& polygon, Rgba color, double 
     return;
   }
 
-  double minX = polygon[0].x;
-  double maxX = polygon[0].x;
-  double minY = polygon[0].y;
-  double maxY = polygon[0].y;
-  for (std::size_t i = 1; i < count; ++i) {
-    minX = std::min(minX, polygon[i].x);
-    maxX = std::max(maxX, polygon[i].x);
-    minY = std::min(minY, polygon[i].y);
-    maxY = std::max(maxY, polygon[i].y);
-  }
   const double radius = width * 0.5;
-  const int x0 = std::max(0, static_cast<int>(std::floor(minX - radius)));
-  const int x1 = std::min(width_ - 1, static_cast<int>(std::ceil(maxX + radius)));
-  const int y0 = std::max(0, static_cast<int>(std::floor(minY - radius)));
-  const int y1 = std::min(height_ - 1, static_cast<int>(std::ceil(maxY + radius)));
   const double radiusSquared = radius * radius;
 
   constexpr int kSamples = 2;
   constexpr double kInvSamples = 1.0 / (kSamples * kSamples);
-  for (int y = y0; y <= y1; ++y) {
-    for (int x = x0; x <= x1; ++x) {
-      int covered = 0;
-      for (int sy = 0; sy < kSamples; ++sy) {
-        for (int sx = 0; sx < kSamples; ++sx) {
-          const double px = static_cast<double>(x) + (static_cast<double>(sx) + 0.5) / kSamples;
-          const double py = static_cast<double>(y) + (static_cast<double>(sy) + 0.5) / kSamples;
-          double nearest = std::numeric_limits<double>::infinity();
-          for (std::size_t i = 0; i < count; ++i) {
-            const Vec2& a = polygon[i];
-            const Vec2& b = polygon[(i + 1) % count];
-            const double dx = b.x - a.x;
-            const double dy = b.y - a.y;
-            const double lengthSquared = dx * dx + dy * dy;
+  // Rasterize one narrow segment box at a time.  The earlier implementation
+  // scanned the full polygon box and compared every sample against every
+  // segment; long hatched ribbons therefore grew roughly quadratically.
+  for (std::size_t i = 0; i < count; ++i) {
+    const Vec2& a = polygon[i];
+    const Vec2& b = polygon[(i + 1) % count];
+    const double dx = b.x - a.x;
+    const double dy = b.y - a.y;
+    const double lengthSquared = dx * dx + dy * dy;
+    const int x0 = std::max(0, static_cast<int>(std::floor(std::min(a.x, b.x) - radius)));
+    const int x1 = std::min(width_ - 1, static_cast<int>(std::ceil(std::max(a.x, b.x) + radius)));
+    const int y0 = std::max(0, static_cast<int>(std::floor(std::min(a.y, b.y) - radius)));
+    const int y1 = std::min(height_ - 1, static_cast<int>(std::ceil(std::max(a.y, b.y) + radius)));
+    for (int y = y0; y <= y1; ++y) {
+      for (int x = x0; x <= x1; ++x) {
+        int covered = 0;
+        for (int sy = 0; sy < kSamples; ++sy) {
+          for (int sx = 0; sx < kSamples; ++sx) {
+            const double px = static_cast<double>(x) + (static_cast<double>(sx) + 0.5) / kSamples;
+            const double py = static_cast<double>(y) + (static_cast<double>(sy) + 0.5) / kSamples;
             const double t = lengthSquared > 0.0
                                  ? std::clamp(((px - a.x) * dx + (py - a.y) * dy) / lengthSquared, 0.0, 1.0)
                                  : 0.0;
             const double ex = px - (a.x + t * dx);
             const double ey = py - (a.y + t * dy);
-            nearest = std::min(nearest, ex * ex + ey * ey);
+            covered += ex * ex + ey * ey <= radiusSquared ? 1 : 0;
           }
-          covered += nearest <= radiusSquared ? 1 : 0;
         }
-      }
-      if (covered != 0) {
-        blend(x, y, color.r, color.g, color.b, color.a * covered * kInvSamples);
+        if (covered != 0) {
+          blend(x, y, color.r, color.g, color.b, color.a * covered * kInvSamples);
+        }
       }
     }
   }

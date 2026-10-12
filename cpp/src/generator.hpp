@@ -1,6 +1,7 @@
 #pragma once
 
 #include "planner.hpp"
+#include "raster.hpp"
 #include "scenery.hpp"
 
 #include <condition_variable>
@@ -18,6 +19,7 @@ struct GenEvent {
   double ms = 0;
   double xmax = 0;
   Piece piece;
+  RasterizedPiece raster;
 };
 
 class Generator {

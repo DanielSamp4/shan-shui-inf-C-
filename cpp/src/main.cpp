@@ -301,16 +301,14 @@ int main(int argc, char** argv) {
   const std::vector<Piece> reference = collectPieces(seed, 3584, referencePlan);
 
   std::vector<Piece> received;
+  std::vector<RasterizedPiece> receivedRasters;
   GenEvent event;
   while (generator.next(event)) {
     if (event.kind == GenEvent::Kind::Timing) {
-      std::ostringstream line;
-      line << std::fixed << std::setprecision(1);
-      line << "frame " << event.tag << " " << event.ms << " ms | xmax " << static_cast<long long>(event.xmax);
-      std::cout << line.str() << "\n";
       continue;
     }
     received.push_back(std::move(event.piece));
+    receivedRasters.push_back(std::move(event.raster));
   }
 
   const bool planOk = seed != "1" || generator.plan().matchesSeed1();
@@ -325,7 +323,7 @@ int main(int argc, char** argv) {
   strip.writeBmp("chunk-check.bmp");
   std::cout << "ok chunk-check.bmp\n";
 
-  const bool scrollOk = playScroll(received, seed, scrollSpeed, &generator);
+  const bool scrollOk = playScroll(std::move(receivedRasters), seed, scrollSpeed, &generator);
   return strokeOk && ridgeOk && textureOk && footOk && distantOk && flatOk && hutOk && boatOk && paperOk &&
                  multiplyOk && planOk && threadOk && scrollOk
              ? 0
