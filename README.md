@@ -4,11 +4,19 @@ Este projeto é um fork de [LingDong-/shan-shui-inf](https://github.com/LingDong
 
 O objetivo deste fork é levar essa experiência para uma **ESP32-S3 4.3-inch Display Development Board**. O dispositivo deverá gerar e exibir uma paisagem contínua e aparentemente infinita, sem revelar a construção dos objetos durante o deslocamento.
 
+## Caderno interativo
+
+O primeiro capítulo do blog está em [blog/](blog/README.md). Ele usa Canvas
+para explicar, com controles de semente e camadas, como uma montanha procedural
+é composta a partir de uma receita determinística.
+
 ## Estado do projeto
 
 A etapa desktop em C++ está concluída como referência de implementação e fidelidade visual. Ela inclui geração procedural incremental, pré-carregamento de horizonte, rasterização fora da thread de apresentação, scroll subpixel com VSync e composição de tinta em modo multiply.
 
 A próxima etapa é analisar essa referência e arquitetar a versão para o sistema embarcado. A intenção não é continuar alterando o código C++ de desktop, salvo correções explicitamente necessárias.
+
+A implementação inicial dessa nova fase está em [esp32s3/](esp32s3/README.md): um projeto ESP-IDF para a Waveshare 4.3-inch 800×480 que estabelece framebuffer RGB565 em PSRAM e cache circular de tiles antes do port da gramática completa de montanhas.
 
 ## Milestones
 
