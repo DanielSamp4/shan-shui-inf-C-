@@ -6,6 +6,8 @@
 #include "board_config.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 static const char *TAG = "shan_shui.tiles";
 
@@ -42,19 +44,48 @@ static void raster_preview_tile(shan_shui_tile_t *tile, uint32_t seed) {
       }
       tile->pixels[y * SHAN_SHUI_TILE_WIDTH + x] = color;
     }
+    /* Tile construction runs during bring-up on the presentation task. */
+    if ((y & 15) == 15) {
+      vTaskDelay(pdMS_TO_TICKS(1));
+    }
   }
 }
 
-static shan_shui_tile_t *find_tile(shan_shui_tile_cache_t *cache, int32_t world_tile) {
-  for (int i = 0; i < SHAN_SHUI_TILE_COUNT; ++i) {
-    if (cache->tiles[i].world_tile == world_tile) {
-      return &cache->tiles[i];
+static void render_tile(shan_shui_tile_cache_t *cache, int32_t world_tile) {
+  shan_shui_tile_t *tile = &cache->tiles[(uint32_t)world_tile % SHAN_SHUI_TILE_COUNT];
+  tile->ready = false;
+  tile->world_tile = world_tile;
+  raster_preview_tile(tile, cache->seed);
+  tile->ready = true;
+}
+
+static void tile_render_task(void *arg) {
+  shan_shui_tile_cache_t *cache = arg;
+  for (;;) {
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    while (cache->rendered_world_tile < cache->requested_world_tile) {
+      const int32_t world_tile = ++cache->rendered_world_tile;
+      render_tile(cache, world_tile);
+      ESP_LOGD(TAG, "prepared tile %ld", (long)world_tile);
     }
   }
-  shan_shui_tile_t *replacement = &cache->tiles[(uint32_t)world_tile % SHAN_SHUI_TILE_COUNT];
-  replacement->world_tile = world_tile;
-  raster_preview_tile(replacement, cache->seed);
-  return replacement;
+}
+
+static void request_tile_through(shan_shui_tile_cache_t *cache, int32_t world_tile) {
+  if (world_tile <= cache->requested_world_tile) {
+    return;
+  }
+  cache->requested_world_tile = world_tile;
+  xTaskNotifyGive(cache->render_task);
+}
+
+static shan_shui_tile_t *find_tile(shan_shui_tile_cache_t *cache, int32_t world_tile) {
+  shan_shui_tile_t *tile = &cache->tiles[(uint32_t)world_tile % SHAN_SHUI_TILE_COUNT];
+  while (!tile->ready || tile->world_tile != world_tile) {
+    ESP_LOGW(TAG, "waiting for tile %ld", (long)world_tile);
+    vTaskDelay(pdMS_TO_TICKS(1));
+  }
+  return tile;
 }
 
 bool shan_shui_tile_cache_init(shan_shui_tile_cache_t *cache, uint32_t seed) {
@@ -63,19 +94,32 @@ bool shan_shui_tile_cache_init(shan_shui_tile_cache_t *cache, uint32_t seed) {
   const size_t bytes = SHAN_SHUI_TILE_WIDTH * SHAN_SHUI_LCD_HEIGHT * sizeof(uint16_t);
   for (int i = 0; i < SHAN_SHUI_TILE_COUNT; ++i) {
     cache->tiles[i].world_tile = INT32_MIN;
+    cache->tiles[i].ready = false;
     cache->tiles[i].pixels = heap_caps_malloc(bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (cache->tiles[i].pixels == NULL) {
       ESP_LOGE(TAG, "PSRAM allocation failed for tile %d", i);
       return false;
     }
   }
-  ESP_LOGI(TAG, "tile cache: %d tiles × %u bytes", SHAN_SHUI_TILE_COUNT, (unsigned)bytes);
+  /* The current screen and the immediately following screen are ready at boot. */
+  for (int32_t world_tile = 0; world_tile < 2; ++world_tile) {
+    render_tile(cache, world_tile);
+  }
+  cache->rendered_world_tile = 1;
+  cache->requested_world_tile = 1;
+  if (xTaskCreatePinnedToCore(tile_render_task, "shan_shui_tiles", 4096, cache, 4, &cache->render_task, 1) != pdPASS) {
+    ESP_LOGE(TAG, "could not create tile worker");
+    return false;
+  }
+  ESP_LOGI(TAG, "tile cache: %d tiles × %u bytes, worker on CPU1", SHAN_SHUI_TILE_COUNT, (unsigned)bytes);
   return true;
 }
 
 void shan_shui_tile_cache_compose(shan_shui_tile_cache_t *cache, uint16_t *framebuffer, int32_t camera_x) {
   const int32_t first_tile = camera_x / SHAN_SHUI_TILE_WIDTH;
   const int32_t in_tile_x = camera_x % SHAN_SHUI_TILE_WIDTH;
+  /* Keep two whole tiles ahead of the widest possible 800 px viewport. */
+  request_tile_through(cache, first_tile + SHAN_SHUI_TILE_COUNT - 1);
   for (int x = 0; x < SHAN_SHUI_LCD_WIDTH;) {
     const int32_t absolute_x = in_tile_x + x;
     const int32_t tile_index = first_tile + absolute_x / SHAN_SHUI_TILE_WIDTH;
